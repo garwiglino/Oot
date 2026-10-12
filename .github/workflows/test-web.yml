@@ -1,0 +1,42 @@
+name: Tester le jeu web
+on:
+  workflow_run:
+    workflows: [Compiler et publier le jeu web]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Build run containing the oot-web-site artifact
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: oot-web-site
+          path: site
+          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Installer les navigateurs de test
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium webkit
+      - name: Tester le chargement sans ROM
+        run: node tests/web-smoke.cjs site
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oot-web-browser-reports
+          path: web-test-reports
+          retention-days: 14
