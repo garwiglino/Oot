@@ -12,9 +12,14 @@ on:
 permissions:
   contents: read
   actions: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
 jobs:
   smoke:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # A build may have produced the artifact even if its legacy deploy step failed.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -28,10 +33,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Corriger le chargement avant les tests
+        run: node web/fix-loader.cjs site/index.html
       - name: Installer les navigateurs de test
         run: |
-          npm install --no-save --no-package-lock playwright@1.56.1
+          npm install --no-save --no-package-lock playwright@1.56.1 jsdom@26.1.0 fake-indexeddb@6.2.4
           npx playwright install --with-deps chromium webkit
+      - name: Tester les cas limites du chargeur
+        run: node tests/loader.cjs site/index.html
       - name: Tester le chargement sans ROM
         run: node tests/web-smoke.cjs site
       - uses: actions/upload-artifact@v4
@@ -40,3 +49,24 @@ jobs:
           name: oot-web-browser-reports
           path: web-test-reports
           retention-days: 14
+      - name: Recalculer les empreintes après correction du chargeur
+        run: |
+          rm -f site/SHA256SUMS.txt
+          sha256sum site/* > site/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oot-web-tested
+          path: site
+          retention-days: 14
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: smoke
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
