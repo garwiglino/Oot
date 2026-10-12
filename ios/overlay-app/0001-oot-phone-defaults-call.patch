@@ -1,0 +1,13 @@
+--- a/app/ios/SohIosShell.m	2026-10-12 09:16:29.698364053 +0000
++++ b/app/ios/SohIosShell.m	2026-10-12 09:16:29.716246258 +0000
+@@ -6446,6 +6446,10 @@
+     SohIos_InstallConfigPersist(); // flush CVars on resign (swipe-kill safety)
+     dispatch_async(dispatch_get_main_queue(), ^{ SohIos_InstallBackgroundReconciler(); });
+     SohIos_SeedDefaultsOnce();     // per-device fidelity defaults, first run only
++    {
++        extern void SohOot_SeedPhoneDefaults(void);
++        SohOot_SeedPhoneDefaults(); // Oot fork: phone camera/aiming/targeting defaults
++    }
+     SDL_SetEventFilter(SohIos_EventFilter, NULL); // soh:// deep links + stray-Escape guard
+     // Input environment, first lines of the trace: which device, which pads,
+     // and whether a hardware keyboard is attached — the last one decides

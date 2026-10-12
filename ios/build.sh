@@ -81,9 +81,18 @@ fi
 git -C "$PORT" fetch -q origin "$PORT_COMMIT"
 git -C "$PORT" checkout -q --detach "$PORT_COMMIT"
 
-# Our additions: the launch-time installer and the CMake patch that bundles oot.o2r.
+# Our additions: the launch-time oot.o2r installer, the phone defaults (camera, aiming,
+# targeting), the CMake patch that compiles/bundles them, and the shell hook that seeds them.
 cp "$HERE/app/SohBundledO2r.m" "$PORT/app/ios/SohBundledO2r.m"
+cp "$HERE/app/SohOotPhoneDefaults.m" "$PORT/app/ios/SohOotPhoneDefaults.m"
 cp "$HERE/overlay/0900-oot-bundled-o2r.patch" "$PORT/overlay/patches/0900-oot-bundled-o2r.patch"
+for p in "$HERE"/overlay-app/*.patch; do
+    # Re-applied from the pristine file on every run, so the script can be re-run safely.
+    files=$(sed -n 's#^+++ b/\([^[:space:]]*\).*#\1#p' "$p")
+    git -C "$PORT" checkout -q -- $files
+    patch -p1 --forward --fuzz=0 -d "$PORT" < "$p" >/dev/null || fail "le patch $(basename "$p") ne s'applique pas"
+    echo "patch appliqué : $(basename "$p")"
+done
 
 step "Sources Ship of Harkinian 9.3.0 + patchs iOS"
 "$PORT/scripts/bootstrap.sh"

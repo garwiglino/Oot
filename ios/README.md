@@ -73,13 +73,39 @@ Limites du compte gratuit : 3 apps installées de cette façon en même temps, S
 Sans SideStore, installée depuis Xcode, l'app expire après 7 jours : relancez-la depuis Xcode (⌘R).
 Un compte Apple Developer payant porte la durée à un an.
 
+## Réglages pensés pour le téléphone
+
+Au premier lancement, l'app applique ces réglages une seule fois. Tout reste modifiable ensuite dans le
+menu ≡ du jeu, et vos changements ne sont jamais écrasés.
+
+| | Réglage | Effet |
+|---|---|---|
+| Caméra | **Free Look** activé | Caméra libre : glisser un doigt sur une zone vide de l'écran tourne la caméra |
+| Caméra | **Fix Camera Drift**, **Fix Camera Swing**, caméra d'inactivité désactivée | Caméra stable : pas de dérive, pas de balancement, pas de recentrage quand Link est immobile |
+| Visée | **Disable Auto-Centering in First-Person View** | En vue subjective, la vue reste là où vous l'avez orientée |
+| Ciblage | **Reworked Targeting**, et Z tactile sans double-tap | Un tap sur Z verrouille, un tap libère, toujours ; le pouce reste libre pendant le combat |
+
+**Caméra automatique comme sur N64** : désactivez **Free Look** dans le menu ≡.
+La **visée au gyroscope** reste disponible dans les réglages iOS du menu (désactivée par défaut).
+
+### Étape 2, après votre premier test sur iPhone
+
+Nouvelles mécaniques, ajoutées une par une :
+
+- recentrage automatique de la caméra derrière Link après quelques secondes sans y toucher (caméra libre) ;
+- viser en glissant le doigt en vue subjective (arc, lance-pierre, grappin) ;
+- aide à la visée légère vers la cible la plus proche du réticule ;
+- changer de cible d'un geste sur Z, sans relâcher puis reverrouiller.
+
 ## Comment ça marche
 
 | Fichier | Rôle |
 |---|---|
 | [`build.sh`](build.sh) | Tout le processus : vérifications, conversion de la ROM en `.z64`, portage iOS épinglé (commit `a273ff4`), extraction de `oot.o2r`, génération du projet Xcode |
-| [`overlay/0900-oot-bundled-o2r.patch`](overlay/0900-oot-bundled-o2r.patch) | Ajoute `oot.o2r` aux ressources de l'app (`-DSOH_OOT_O2R_PATH`) |
+| [`overlay/0900-oot-bundled-o2r.patch`](overlay/0900-oot-bundled-o2r.patch) | Ajoute `oot.o2r` aux ressources de l'app (`-DSOH_OOT_O2R_PATH`) et compile les deux fichiers ci-dessous |
 | [`app/SohBundledO2r.m`](app/SohBundledO2r.m) | Au lancement, avant le moteur, copie `oot.o2r` dans Documents : l'écran « ROM needed » n'apparaît jamais |
+| [`app/SohOotPhoneDefaults.m`](app/SohOotPhoneDefaults.m) | Réglages téléphone du premier lancement (caméra, visée, ciblage), versionnés |
+| [`overlay-app/0001-oot-phone-defaults-call.patch`](overlay-app/0001-oot-phone-defaults-call.patch) | Appelle ces réglages juste après ceux du portage, avant l'initialisation des améliorations |
 
 Le projet Xcode est généré sur votre Mac par CMake (chemins absolus propres à votre machine) : il n'est
 donc pas stocké dans le dépôt. Relancez `./ios/build.sh` pour le régénérer ; les étapes déjà faites
