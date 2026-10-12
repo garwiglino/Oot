@@ -16,7 +16,8 @@
 #
 # The ROM and the extracted oot.o2r stay in ios/rom/ and ios/work/, both git-ignored:
 # never commit or share them, nor the resulting app.
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; printf "ERREUR : ligne %s, code %s : %s\n" "$LINENO" "$status" "$BASH_COMMAND" >&2; exit "$status"' ERR
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PORT_REPO="https://github.com/rebelancap/Shipwright-ios"
@@ -45,7 +46,9 @@ command -v xcodebuild >/dev/null || fail "Xcode est requis (App Store), puis : s
 command -v cmake >/dev/null || fail "cmake manquant : brew install cmake"
 command -v ninja >/dev/null || fail "ninja manquant : brew install ninja"
 command -v python3 >/dev/null || fail "python3 manquant : xcode-select --install"
-xcodebuild -version | head -1
+# Read all output: head can close the pipe early and kill xcodebuild with
+# SIGPIPE, which aborts this script when pipefail is enabled.
+xcodebuild -version
 
 # The macOS oracle/extractor needs desktop SDL2 and GLEW. Keep these host
 # search paths scoped to build-oracle.sh: never inject Mac libraries into iOS.
