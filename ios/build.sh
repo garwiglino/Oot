@@ -7,6 +7,9 @@
 #   2. ./ios/build.sh            -> generates and opens ios/work/build-ios/Ship.xcodeproj
 #   3. in Xcode: scheme "soh", your iPhone as destination, Signing team, then Run
 #
+#   or ./ios/build.sh --ipa      -> builds an unsigned ios/work/OcarinaOfTime.ipa for SideStore,
+#                                   which signs it with a free Apple ID and renews it automatically
+#
 # Optional environment variables:
 #   OOT_TEAM_ID     Apple team ID (otherwise pick it in Xcode > Signing & Capabilities)
 #   OOT_BUNDLE_ID   bundle identifier (default com.garwiglino.oot, must be unique to you)
@@ -24,9 +27,17 @@ GAMEDATA="$WORK/gamedata"
 BUILD="$WORK/build-ios"
 BUNDLE_ID="${OOT_BUNDLE_ID:-com.garwiglino.oot}"
 TEAM="${OOT_TEAM_ID:-}"
+IPA="$WORK/OcarinaOfTime.ipa"
 
 fail() { echo "ERREUR : $*" >&2; exit 1; }
 step() { echo; echo "=== $* ==="; }
+
+MODE=xcode
+case "${1:-}" in
+    "") ;;
+    --ipa) MODE=ipa ;;
+    *) fail "option inconnue : $1 (seule option : --ipa)" ;;
+esac
 
 step "Vérifications"
 [[ "$(uname -s)" == "Darwin" ]] || fail "ce script doit être lancé sur un Mac."
@@ -110,6 +121,31 @@ cmake --no-warn-unused-cli -S "$PORT/vendor/Shipwright" -B "$BUILD" -GXcode \
 
 PROJECT="$BUILD/Ship.xcodeproj"
 [[ -d "$PROJECT" ]] || fail "projet Xcode introuvable : $PROJECT"
+
+if [[ "$MODE" == "ipa" ]]; then
+    step "Compilation de l'app (non signée, pour SideStore)"
+    cmake --build "$BUILD" --config Release --target soh --parallel "$(sysctl -n hw.ncpu)" -- \
+        CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+    APP="$BUILD/soh/Release-iphoneos/soh.app"
+    [[ -d "$APP" ]] || fail "app introuvable : $APP"
+    [[ -f "$APP/oot.o2r" ]] || fail "oot.o2r absent de l'app : le patch 0900 n'a pas été appliqué"
+    "$PORT/scripts/assert-app-assets.sh" "$APP"
+
+    step "Création de l'IPA"
+    rm -rf "$WORK/ipa" "$IPA"
+    mkdir -p "$WORK/ipa/Payload"
+    cp -R "$APP" "$WORK/ipa/Payload/"
+    (cd "$WORK/ipa" && zip -qry "$IPA" Payload)
+    rm -rf "$WORK/ipa"
+    ls -lh "$IPA"
+
+    step "Terminé"
+    echo "IPA : $IPA"
+    echo "Envoyez-la sur l'iPhone (AirDrop -> Fichiers), puis dans SideStore : My Apps -> + -> choisissez l'IPA."
+    echo "Usage personnel uniquement : elle contient les données de votre ROM, ne la partagez pas."
+    open -R "$IPA"
+    exit 0
+fi
 
 step "Terminé"
 echo "Projet Xcode : $PROJECT"

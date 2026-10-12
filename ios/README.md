@@ -42,13 +42,36 @@ Dans Xcode :
 Au premier lancement sur l'iPhone, si iOS bloque l'app : **Réglages → Général → VPN et gestion de
 l'appareil** → faites confiance à votre profil développeur.
 
+Avec un compte Apple gratuit, préférez la méthode **SideStore** ci-dessous (`./ios/build.sh --ipa`) :
+l'app est renouvelée automatiquement et n'expire pas au bout de 7 jours.
+
 Variables optionnelles : `OOT_TEAM_ID` (identifiant d'équipe Apple, pour ne pas le choisir dans Xcode)
 et `OOT_BUNDLE_ID` (identifiant de l'app, `com.garwiglino.oot` par défaut).
 
-## Compte Apple gratuit
+## Compte Apple gratuit : renouvellement automatique avec SideStore
 
-L'app fonctionne **7 jours**, puis il faut la réinstaller depuis Xcode (⌘R) : les sauvegardes sont
-conservées. Un compte Apple Developer payant porte cette durée à un an.
+Apple limite à **7 jours** la signature des apps installées avec un compte gratuit ; aucun projet ne
+peut lever cette limite. [SideStore](https://sidestore.io) la rend invisible : il signe l'app avec votre
+compte gratuit et la **renouvelle tout seul sur l'iPhone**, sans Mac.
+
+1. Installez SideStore une fois sur l'iPhone, depuis le Mac, avec [iloader](https://github.com/nab138/iloader).
+2. Construisez l'IPA :
+
+   ```sh
+   ./ios/build.sh --ipa
+   ```
+
+   Elle est créée dans `ios/work/OcarinaOfTime.ipa` (non signée, avec les données de votre ROM intégrées).
+3. Envoyez-la sur l'iPhone par AirDrop et enregistrez-la dans **Fichiers**.
+4. Dans SideStore : **My Apps** → **+** → choisissez `OcarinaOfTime.ipa`.
+5. Activez le rafraîchissement automatique en suivant la [documentation de SideStore](https://docs.sidestore.io).
+   SideStore affiche les jours restants ; si un renouvellement automatique échoue, ouvrez-le et
+   touchez **Refresh All** avant l'échéance. Les sauvegardes sont conservées.
+
+Limites du compte gratuit : 3 apps installées de cette façon en même temps, SideStore compris.
+
+Sans SideStore, installée depuis Xcode, l'app expire après 7 jours : relancez-la depuis Xcode (⌘R).
+Un compte Apple Developer payant porte la durée à un an.
 
 ## Comment ça marche
 
