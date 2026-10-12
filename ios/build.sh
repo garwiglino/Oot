@@ -2,7 +2,7 @@
 # Native iOS build of Ocarina of Time (Ship of Harkinian, Metal) with the game data from
 # YOUR OWN ROM embedded in the app, so it never asks for a ROM at launch.
 #
-# Run on a Mac with Xcode, cmake and ninja (brew install cmake ninja):
+# Run on a Mac with Xcode, cmake and ninja (brew install cmake ninja sdl2-compat glew):
 #   1. put your ROM in ios/rom/ (.z64, .n64 or .v64)
 #   2. ./ios/build.sh            -> generates and opens ios/work/build-ios/Ship.xcodeproj
 #   3. in Xcode: scheme "soh", your iPhone as destination, Signing team, then Run
@@ -46,6 +46,23 @@ command -v cmake >/dev/null || fail "cmake manquant : brew install cmake"
 command -v ninja >/dev/null || fail "ninja manquant : brew install ninja"
 command -v python3 >/dev/null || fail "python3 manquant : xcode-select --install"
 xcodebuild -version | head -1
+
+# The macOS oracle/extractor needs desktop SDL2 and GLEW. Keep these host
+# search paths scoped to build-oracle.sh: never inject Mac libraries into iOS.
+command -v brew >/dev/null || fail "Homebrew est requis pour les dépendances Mac : https://brew.sh"
+HOST_BREW_PREFIX="$(brew --prefix)"
+HOST_SDL_PREFIX=""
+for formula in sdl2-compat sdl2; do
+    candidate="$(brew --prefix "$formula" 2>/dev/null || true)"
+    if [[ -n "$candidate" && -d "$candidate" ]]; then
+        HOST_SDL_PREFIX="$candidate"
+        break
+    fi
+done
+[[ -n "$HOST_SDL_PREFIX" ]] || fail "SDL2 manquant pour les outils Mac : brew install sdl2-compat glew"
+HOST_GLEW_PREFIX="$(brew --prefix glew 2>/dev/null || true)"
+[[ -n "$HOST_GLEW_PREFIX" && -d "$HOST_GLEW_PREFIX" ]] || fail "GLEW manquant pour les outils Mac : brew install glew"
+HOST_CMAKE_PREFIX_PATH="$HOST_SDL_PREFIX:$HOST_GLEW_PREFIX:$HOST_BREW_PREFIX${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
 
 shopt -s nullglob nocaseglob
 roms=("$HERE"/rom/*.z64 "$HERE"/rom/*.n64 "$HERE"/rom/*.v64)
@@ -103,7 +120,9 @@ step "Dépendances audio iOS"
 
 step "Compilation des outils macOS (soh.o2r + extracteur de ROM)"
 SOH_O2R="$PORT/oracle/build-cmake/soh/soh.o2r"
-[[ -f "$SOH_O2R" && -x "$PORT/oracle/build-cmake/soh-torch" ]] || "$PORT/scripts/build-oracle.sh"
+if [[ ! -f "$SOH_O2R" || ! -x "$PORT/oracle/build-cmake/soh-torch" ]]; then
+    CMAKE_PREFIX_PATH="$HOST_CMAKE_PREFIX_PATH" "$PORT/scripts/build-oracle.sh"
+fi
 
 step "Extraction des données du jeu depuis votre ROM (oot.o2r)"
 OOT_O2R="$GAMEDATA/oot.o2r"
