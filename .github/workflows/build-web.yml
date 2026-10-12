@@ -1,0 +1,75 @@
+name: Compiler et publier le jeu web
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  # Ship of Harkinian web fork (Emscripten/WebGL, touch controls, in-browser ROM extraction)
+  SOH_REPO: https://github.com/zalo/shipwright-64
+  SOH_COMMIT: f2ce54a3d60c6b8f9eea2e2a671910501db89289
+  EMSDK_VERSION: 3.1.64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Récupérer les sources de Ship of Harkinian
+        run: |
+          git init -q soh-src
+          git -C soh-src remote add origin "$SOH_REPO"
+          git -C soh-src fetch -q --depth 1 origin "$SOH_COMMIT"
+          git -C soh-src checkout -q FETCH_HEAD
+          git -C soh-src submodule update --init libsm64
+          git -C soh-src apply "$GITHUB_WORKSPACE/patches/shell-mobile-fr.patch"
+
+      - name: Installer Ninja
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ env.EMSDK_VERSION }}
+          actions-cache-folder: emsdk-cache
+
+      - name: Compiler en WebAssembly
+        working-directory: soh-src
+        run: ./build_web.sh Release
+
+      - name: Assembler le site
+        run: |
+          out=soh-src/build-web/soh
+          ls -la "$out"
+          mkdir -p site
+          cp "$out/soh.html" site/index.html
+          cp "$out/soh.js" "$out/soh.wasm" "$out/soh.data" site/
+          if [ -f "$out/soh.o2r" ]; then cp "$out/soh.o2r" site/; else cp soh-src/soh/soh/web/soh.o2r site/; fi
+          touch site/.nojekyll
+          ls -la site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

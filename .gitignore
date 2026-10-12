@@ -1,0 +1,13 @@
+# Never commit ROMs or archives extracted from them: this repository is public.
+*.z64
+*.n64
+*.v64
+*.rom
+oot.o2r
+oot-mq.o2r
+*.otr
+
+# Local build output
+soh-src/
+site/
+build-web/

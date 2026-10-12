@@ -1,0 +1,100 @@
+diff --git a/soh/soh/web/shell.html b/soh/soh/web/shell.html
+index 3cadc28..2cc4d98 100644
+--- a/soh/soh/web/shell.html
++++ b/soh/soh/web/shell.html
+@@ -201,14 +201,15 @@
+     <p class="subtitle">WebAssembly Port</p>
+ 
+     <div id="otr-picker" onclick="document.getElementById('otr-file').click()">
+-      <p>Click or drag to load game files</p>
+-      <p class="hint">Requires soh.o2r and either oot.o2r or a .z64 ROM</p>
++      <p>Touchez ici pour choisir votre ROM Ocarina of Time</p>
++      <p class="hint">Formats .z64, .n64 ou .v64 — la ROM reste sur votre appareil</p>
+     </div>
+-    <input type="file" id="otr-file" accept=".otr,.o2r,.z64,.n64,.v64" multiple>
++    <!-- No accept filter: iOS greys out files whose extension it doesn't know (.z64). Files are validated in JS. -->
++    <input type="file" id="otr-file" multiple>
+ 
+-    <!-- SM64 ROM picker — separate from OoT picker, enables Mario Mode -->
++    <!-- SM64 ROM picker — separate from OoT picker, enables Mario Mode (hidden in this build) -->
+     <div id="sm64-picker" onclick="document.getElementById('sm64-file').click()"
+-         style="margin-top:12px; padding:12px 16px; border:2px dashed #e52213;
++         style="display:none; margin-top:12px; padding:12px 16px; border:2px dashed #e52213;
+                 border-radius:8px; cursor:pointer; opacity:0.85; font-size:13px;">
+       <p style="margin:0; font-weight:bold; color:#e52213;">&#127875; Optional: Mario Mode</p>
+       <p style="margin:4px 0 0; color:#ccc;">
+@@ -527,9 +528,30 @@
+ 
+     // ---- ROM detection helpers ----
+ 
++    // Anything that isn't an archive is treated as a ROM candidate and validated by content,
++    // since mobile pickers may hand over files with unexpected extensions.
+     function isRomFile(name) {
+       var ext = name.toLowerCase().split('.').pop();
+-      return ext === 'z64' || ext === 'n64' || ext === 'v64';
++      return ext !== 'o2r' && ext !== 'otr';
++    }
++
++    // Converts .v64 (byte-swapped) and .n64 (little-endian) dumps to big-endian .z64 in place.
++    function normalizeRomByteOrder(arrayBuffer) {
++      if (arrayBuffer.byteLength < 0x40 || arrayBuffer.byteLength % 4 !== 0) return arrayBuffer;
++      var bytes = new Uint8Array(arrayBuffer);
++      var magic = new DataView(arrayBuffer).getUint32(0, false);
++      var i, t;
++      if (magic === 0x37804012) { // .v64: swap each 16-bit pair
++        for (i = 0; i < bytes.length; i += 2) {
++          t = bytes[i]; bytes[i] = bytes[i + 1]; bytes[i + 1] = t;
++        }
++      } else if (magic === 0x40123780) { // .n64: reverse each 32-bit word
++        for (i = 0; i < bytes.length; i += 4) {
++          t = bytes[i]; bytes[i] = bytes[i + 3]; bytes[i + 3] = t;
++          t = bytes[i + 1]; bytes[i + 1] = bytes[i + 2]; bytes[i + 2] = t;
++        }
++      }
++      return arrayBuffer;
+     }
+ 
+     // Returns true if the ArrayBuffer looks like an OoT ROM (not SM64).
+@@ -649,28 +671,15 @@
+           setProgress(15);
+           var reader = new FileReader();
+           reader.onload = function(e) {
+-            var buf = e.target.result;
+-            // Reject SM64 ROMs accidentally dropped on the OoT picker
++            var buf = normalizeRomByteOrder(e.target.result);
+             if (!isOotRom(buf)) {
+-              // Check if it might be a SM64 ROM and offer to route it correctly
+-              var view = new DataView(buf);
+-              var magic = view.getUint32(0, false);
++              var magic = new DataView(buf).getUint32(0, false);
+               if (magic === 0x80371240) {
+-                // Valid N64 ROM but not OoT — probably SM64, route to Mario mode
+-                showError('This looks like an SM64 ROM, not an OoT ROM. ' +
+-                          'Use the red \u{1F975} Mario Mode picker below for the SM64 ROM, ' +
+-                          'and load your OoT ROM here.');
+-                hideProgress();
+-                // Auto-route to SM64 handler
+-                sm64RomBuffer = buf;
+-                sm64RomSize = buf.byteLength;
+-                var el = document.getElementById('sm64-status');
+-                if (el) el.textContent = 'ROM detected from main picker — loading as SM64...';
+-                tryLoadBufferedSM64Rom();
++                showError('Ce fichier est une ROM N64, mais pas Ocarina of Time.');
+               } else {
+-                showError('Unrecognized ROM. Please provide the Ocarina of Time (US) .z64 ROM.');
+-                hideProgress();
++                showError('Fichier non reconnu. Choisissez la ROM Ocarina of Time (.z64, .n64 ou .v64, non compressée).');
+               }
++              hideProgress();
+               return;
+             }
+             extractRomInBrowser(buf, pendingRom.name);
+@@ -865,7 +874,7 @@
+           var fileName = urlPath.split('/').pop() || 'rom.z64';
+           if (!isRomFile(fileName)) fileName = 'rom.z64';
+ 
+-          extractRomInBrowser(xhr.response, fileName);
++          extractRomInBrowser(normalizeRomByteOrder(xhr.response), fileName);
+         } else {
+           showError('Failed to download ROM: HTTP ' + xhr.status);
+           hideProgress();
