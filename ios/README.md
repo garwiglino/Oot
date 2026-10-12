@@ -15,10 +15,14 @@ intégrées à l'app. Elle démarre directement, **sans demander de ROM au lance
 ## Prérequis
 
 - Un Mac avec la **dernière version de Xcode** (App Store), ouverte une fois pour installer les composants
-- [Homebrew](https://brew.sh), puis : `brew install cmake ninja`
+- [Homebrew](https://brew.sh), puis : `brew install cmake ninja sdl2-compat glew`
 - Environ **20 Go** d'espace libre
 - Un compte Apple (gratuit ou Apple Developer)
 - Sur l'iPhone : **Réglages → Confidentialité et sécurité → Mode développeur** activé
+
+SDL2 et GLEW servent aux outils **macOS** de préparation des données. Le script accepte aussi
+une installation Homebrew existante de `sdl2` et transmet les chemins Homebrew uniquement
+à la compilation de ces outils, sans les ajouter à la cible iOS.
 
 ## Compiler
 
