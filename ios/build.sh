@@ -2,7 +2,7 @@
 # Native iOS build of Ocarina of Time (Ship of Harkinian, Metal) with the game data from
 # YOUR OWN ROM embedded in the app, so it never asks for a ROM at launch.
 #
-# Run on a Mac with Xcode, cmake and ninja (brew install cmake ninja sdl2-compat glew):
+# Run on a Mac with Xcode, cmake and ninja (brew install cmake ninja pkgconf sdl2-compat sdl2_net glew libzip nlohmann-json tinyxml2 libogg libvorbis opus opusfile):
 #   1. put your ROM in ios/rom/ (.z64, .n64 or .v64)
 #   2. ./ios/build.sh            -> generates and opens ios/work/build-ios/Ship.xcodeproj
 #   3. in Xcode: scheme "soh", your iPhone as destination, Signing team, then Run
@@ -63,9 +63,24 @@ for formula in sdl2-compat sdl2; do
     fi
 done
 [[ -n "$HOST_SDL_PREFIX" ]] || fail "SDL2 manquant pour les outils Mac : brew install sdl2-compat glew"
-HOST_GLEW_PREFIX="$(brew --prefix glew 2>/dev/null || true)"
-[[ -n "$HOST_GLEW_PREFIX" && -d "$HOST_GLEW_PREFIX" ]] || fail "GLEW manquant pour les outils Mac : brew install glew"
-HOST_CMAKE_PREFIX_PATH="$HOST_SDL_PREFIX:$HOST_GLEW_PREFIX:$HOST_BREW_PREFIX${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+# Collect all missing host dependencies before the expensive build steps.
+HOST_CMAKE_PREFIX_PATH="$HOST_SDL_PREFIX:$HOST_BREW_PREFIX"
+HOST_PKG_CONFIG_PATH="$HOST_BREW_PREFIX/lib/pkgconfig:$HOST_BREW_PREFIX/share/pkgconfig"
+missing_host_deps=()
+for formula in pkgconf glew libzip nlohmann-json tinyxml2 sdl2_net libogg libvorbis opus opusfile; do
+    candidate="$(brew --prefix "$formula" 2>/dev/null || true)"
+    if [[ -z "$candidate" || ! -d "$candidate" ]]; then
+        missing_host_deps+=("$formula")
+    else
+        HOST_CMAKE_PREFIX_PATH="$HOST_CMAKE_PREFIX_PATH:$candidate"
+        HOST_PKG_CONFIG_PATH="$HOST_PKG_CONFIG_PATH:$candidate/lib/pkgconfig:$candidate/share/pkgconfig"
+    fi
+done
+if [[ ${#missing_host_deps[@]} -gt 0 ]]; then
+    fail "dépendances Mac manquantes : brew install ${missing_host_deps[*]}"
+fi
+HOST_CMAKE_PREFIX_PATH="$HOST_CMAKE_PREFIX_PATH${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+HOST_PKG_CONFIG_PATH="$HOST_PKG_CONFIG_PATH${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 
 shopt -s nullglob nocaseglob
 roms=("$HERE"/rom/*.z64 "$HERE"/rom/*.n64 "$HERE"/rom/*.v64)
@@ -135,7 +150,8 @@ step "Dépendances audio iOS"
 step "Compilation des outils macOS (soh.o2r + extracteur de ROM)"
 SOH_O2R="$PORT/oracle/build-cmake/soh/soh.o2r"
 if [[ ! -f "$SOH_O2R" || ! -x "$PORT/oracle/build-cmake/soh-torch" ]]; then
-    CMAKE_PREFIX_PATH="$HOST_CMAKE_PREFIX_PATH" "$PORT/scripts/build-oracle.sh"
+    CMAKE_PREFIX_PATH="$HOST_CMAKE_PREFIX_PATH" \
+        PKG_CONFIG_PATH="$HOST_PKG_CONFIG_PATH" "$PORT/scripts/build-oracle.sh"
 fi
 
 step "Extraction des données du jeu depuis votre ROM (oot.o2r)"
