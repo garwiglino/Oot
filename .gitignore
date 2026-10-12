@@ -11,3 +11,10 @@ oot-mq.o2r
 soh-src/
 site/
 build-web/
+
+# iOS: your ROM and everything built from it (extracted game data, Xcode build) stay local
+ios/rom/*
+!ios/rom/LISEZMOI.md
+ios/work/
+*.o2r
+*.ipa

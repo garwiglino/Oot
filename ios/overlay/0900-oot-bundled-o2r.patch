@@ -1,0 +1,19 @@
+--- a/soh/CMakeLists.txt	2026-10-12 08:56:08.342375742 +0000
++++ b/soh/CMakeLists.txt	2026-10-12 08:56:08.366351433 +0000
+@@ -304,6 +304,16 @@
+     target_sources(${PROJECT_NAME} PRIVATE "${SOH_O2R_PATH}" "${CMAKE_BINARY_DIR}/gamecontrollerdb.txt")
+     set_source_files_properties("${SOH_O2R_PATH}" "${CMAKE_BINARY_DIR}/gamecontrollerdb.txt"
+         PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
++    # Optional: bundle an oot.o2r extracted from the builder's own ROM. SohBundledO2r.m
++    # installs it into Documents at launch, so the app never asks for a ROM.
++    set(SOH_OOT_O2R_PATH "" CACHE FILEPATH "Path to an oot.o2r built from your own ROM, to bundle")
++    if(SOH_OOT_O2R_PATH)
++        if(NOT EXISTS "${SOH_OOT_O2R_PATH}")
++            message(FATAL_ERROR "SOH_OOT_O2R_PATH does not exist: ${SOH_OOT_O2R_PATH}")
++        endif()
++        target_sources(${PROJECT_NAME} PRIVATE "${SOH_OOT_O2R_PATH}" "${SOH_IOS_SHELL_DIR}/SohBundledO2r.m")
++        set_source_files_properties("${SOH_OOT_O2R_PATH}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
++    endif()
+ endif()
+ 
+ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
