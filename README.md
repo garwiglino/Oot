@@ -29,14 +29,15 @@ de FPS, ajoutez `#fps` à l'adresse : `https://garwiglino.github.io/Oot/#fps`.
 
 ## Fonctionnement
 
-À chaque push sur `main`, le workflow [`build-web.yml`](.github/workflows/build-web.yml) :
+1. Les sources de `zalo/Shipwright` (commit `f81ff64`) sont compilées en WebAssembly avec
+   Emscripten 3.1.64, après application de [`patches/web-mobile-perf.patch`](patches/web-mobile-perf.patch).
+2. Le site compilé (`index.html`, `soh.js`, `soh.wasm`, `soh.data`, `soh.o2r`) est poussé sur la
+   branche **`web-build`**, pour ne pas alourdir `main`.
+3. Le workflow [`deploy-web.yml`](.github/workflows/deploy-web.yml) publie cette branche sur GitHub Pages
+   (onglet **Actions** → *Publier le jeu web* → **Run workflow**).
 
-1. récupère les sources de `zalo/Shipwright` à un commit fixe ;
-2. applique [`patches/web-mobile-perf.patch`](patches/web-mobile-perf.patch) ;
-3. compile en WebAssembly avec Emscripten 3.1.64 ;
-4. publie le site sur GitHub Pages.
-
-Il peut aussi être relancé à la main : onglet **Actions** → *Compiler et publier le jeu web* → **Run workflow**.
+Le workflow [`build-web.yml`](.github/workflows/build-web.yml) permet aussi de tout compiler sur GitHub,
+à lancer à la main (onglet **Actions** → *Compiler et publier le jeu web* → **Run workflow**).
 
 ### Activation de GitHub Pages (une seule fois)
 

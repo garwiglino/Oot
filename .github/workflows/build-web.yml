@@ -1,9 +1,7 @@
 name: Compiler et publier le jeu web
 
+# Manual only: the site is normally built locally and published by deploy-web.yml.
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['**.md']
   workflow_dispatch:
 
 permissions:
@@ -22,7 +20,6 @@ env:
   SOH_COMMIT: f81ff64afdd8e0489237bd03c6b026582f6dc70d
   EMSDK_VERSION: 3.1.64
   BUILD_JOBS: 3
-  CCACHE_DIR: ${{ github.workspace }}/.ccache
 
 jobs:
   build:
@@ -55,32 +52,18 @@ jobs:
           git -C soh-src submodule update --init --depth 1
           git -C soh-src apply "$GITHUB_WORKSPACE/patches/web-mobile-perf.patch"
 
-      - name: Installer Ninja et ccache
-        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache
+      - name: Installer Ninja
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
 
-      # Installed at a fixed path (not a per-run temp dir) so ccache entries match across runs.
       - name: Installer Emscripten
         run: |
           git clone -q --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
           "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"
           "$HOME/emsdk/emsdk" activate "$EMSDK_VERSION"
 
-      - name: Restaurer le cache de compilation
-        uses: actions/cache/restore@v4
-        with:
-          path: .ccache
-          key: ccache-web-${{ env.SOH_COMMIT }}-${{ hashFiles('patches/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ccache-web-${{ env.SOH_COMMIT }}-
-            ccache-web-
-
+      # No EM_COMPILER_WRAPPER=ccache: it broke CMake's FindThreads check (run 3).
       - name: Compiler en WebAssembly
         working-directory: soh-src
-        env:
-          EM_COMPILER_WRAPPER: ccache
-          CCACHE_BASEDIR: ${{ github.workspace }}
-          CCACHE_COMPILERCHECK: string:emsdk-${{ env.EMSDK_VERSION }}
-          CCACHE_MAXSIZE: 4G
         run: |
           source "$HOME/emsdk/emsdk_env.sh"
           ( while sleep 60; do
@@ -94,14 +77,6 @@ jobs:
             -DGFX_DEBUG_DISASSEMBLER=OFF \
             -DSUPPRESS_WARNINGS=ON
           emmake cmake --build build-web --target soh -j"$BUILD_JOBS"
-          ccache -s
-
-      - name: Sauvegarder le cache de compilation
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .ccache
-          key: ccache-web-${{ env.SOH_COMMIT }}-${{ hashFiles('patches/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Assembler le site
         run: |

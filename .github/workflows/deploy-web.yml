@@ -1,0 +1,40 @@
+name: Publier le jeu web
+
+# Publishes the prebuilt site stored on the web-build branch to GitHub Pages.
+# Runs from main because the github-pages environment only accepts the default branch.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: web-build
+          path: site
+
+      - name: Vérifier le site
+        run: |
+          rm -rf site/.git
+          ls -la site
+          test -f site/index.html && test -f site/soh.js && test -f site/soh.wasm && test -f site/soh.o2r
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
