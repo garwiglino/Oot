@@ -43,35 +43,52 @@ Au premier lancement sur l'iPhone, si iOS bloque l'app : **Réglages → Génér
 l'appareil** → faites confiance à votre profil développeur.
 
 Avec un compte Apple gratuit, préférez la méthode **SideStore** ci-dessous (`./ios/build.sh --ipa`) :
-l'app est renouvelée automatiquement et n'expire pas au bout de 7 jours.
+SideStore peut renouveler sa signature avant l'échéance. Ce renouvellement doit être configuré
+sur l'iPhone et peut échouer ; il ne supprime pas la limite Apple.
 
 Variables optionnelles : `OOT_TEAM_ID` (identifiant d'équipe Apple, pour ne pas le choisir dans Xcode)
 et `OOT_BUNDLE_ID` (identifiant de l'app, `com.garwiglino.oot` par défaut).
 
 ## Compte Apple gratuit : renouvellement automatique avec SideStore
 
-Apple limite à **7 jours** la signature des apps installées avec un compte gratuit ; aucun projet ne
-peut lever cette limite. [SideStore](https://sidestore.io) la rend invisible : il signe l'app avec votre
-compte gratuit et la **renouvelle tout seul sur l'iPhone**, sans Mac.
+Le mode `./ios/build.sh --ipa` prépare une IPA non signée pour SideStore.
+Aucun code d'auto-signature ni identifiant Apple n'est intégré au jeu.
+**La configuration ci-dessous se fait sur l'iPhone : générer l'IPA ne l'active pas.**
 
-1. Installez SideStore une fois sur l'iPhone, depuis le Mac, avec [iloader](https://github.com/nab138/iloader).
-2. Construisez l'IPA :
+### Installation initiale
 
+1. Installez SideStore avec iloader en suivant le [guide officiel](https://docs.sidestore.io/docs/installation/install).
+   Préparez aussi **LocalDevVPN**, comme indiqué dans les [prérequis](https://docs.sidestore.io/docs/installation/prerequisites).
+2. Connectez l'iPhone au Wi-Fi, activez LocalDevVPN, puis connectez-vous à SideStore avec
+   le même compte Apple que pour son installation.
+3. Dans **My Apps**, renouvelez d'abord **SideStore lui-même** en touchant son compteur de jours.
+4. Sur le Mac, depuis la racine du dépôt, lancez :
    ```sh
    ./ios/build.sh --ipa
    ```
+5. Transférez `ios/work/OcarinaOfTime.ipa` par AirDrop vers Fichiers sur l'iPhone.
+   Dans **SideStore → My Apps → +**, sélectionnez cette IPA.
 
-   Elle est créée dans `ios/work/OcarinaOfTime.ipa` (non signée, avec les données de votre ROM intégrées).
-3. Envoyez-la sur l'iPhone par AirDrop et enregistrez-la dans **Fichiers**.
-4. Dans SideStore : **My Apps** → **+** → choisissez `OcarinaOfTime.ipa`.
-5. Activez le rafraîchissement automatique en suivant la [documentation de SideStore](https://docs.sidestore.io).
-   SideStore affiche les jours restants ; si un renouvellement automatique échoue, ouvrez-le et
-   touchez **Refresh All** avant l'échéance. Les sauvegardes sont conservées.
+### Renouvellement en arrière-plan
 
-Limites du compte gratuit : 3 apps installées de cette façon en même temps, SideStore compris.
+- Autorisez **SideStore** dans **Réglages → Général → Actualisation en arrière-plan**.
+- Gardez LocalDevVPN actif lorsque SideStore doit installer ou renouveler les apps.
+  Prévoyez une connexion Wi-Fi pour la configuration décrite par la documentation officielle.
+- Évitez le mode économie d'énergie pendant les renouvellements automatiques :
+  [iOS désactive alors l'actualisation en arrière-plan](https://developer.apple.com/documentation/uikit/uiapplication/backgroundrefreshstatus).
+- Autorisez les notifications de SideStore pour suivre les résultats.
+- Faites un premier **Refresh All** manuel et vérifiez que SideStore et Ocarina of Time
+  reviennent à environ **7 DAYS**. Vérifiez ensuite qu'un renouvellement automatique se produit.
 
-Sans SideStore, installée depuis Xcode, l'app expire après 7 jours : relancez-la depuis Xcode (⌘R).
-Un compte Apple Developer payant porte la durée à un an.
+La [FAQ officielle](https://docs.sidestore.io/docs/faq) décrit les renouvellements périodiques
+en arrière-plan. Leur exécution dépend d'iOS, du réseau et de la validité du compte et de
+l'appairage : **aucune garantie d'absence d'expiration**. Si le compteur descend sans remonter,
+ouvrez SideStore avec LocalDevVPN actif et utilisez **Refresh All** avant l'échéance.
+
+Le renouvellement réutilise l'IPA installée : il ne faut pas recompiler le jeu chaque semaine.
+Avec un compte gratuit, la limite reste de trois apps actives, SideStore compris.
+N'effacez pas le jeu pour renouveler sa signature ; sauvegardez vos parties avant une
+réinstallation ou un changement de compte.
 
 ## Réglages pensés pour le téléphone
 
