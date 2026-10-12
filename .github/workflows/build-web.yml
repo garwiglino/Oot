@@ -11,22 +11,40 @@ permissions:
   pages: write
   id-token: write
 
+# Never cancel a build in progress: a new push waits for the running one to finish.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   # Ship of Harkinian web fork (Emscripten/WebGL, touch controls, in-browser ROM extraction)
   SOH_REPO: https://github.com/zalo/Shipwright
   SOH_COMMIT: f81ff64afdd8e0489237bd03c6b026582f6dc70d
   EMSDK_VERSION: 3.1.64
+  BUILD_JOBS: 3
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
+
+      # The previous run was killed mid-build ("runner has received a shutdown signal"),
+      # which on hosted runners usually means memory exhaustion while compiling the large
+      # randomizer sources. Free disk space and add swap so the build can't be OOM-killed.
+      - name: Libérer de l'espace disque et ajouter de la mémoire swap
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 12G /swapfile-build
+          sudo chmod 600 /swapfile-build
+          sudo mkswap /swapfile-build
+          sudo swapon /swapfile-build
+          free -h
+          df -h /
 
       - name: Récupérer les sources de Ship of Harkinian
         run: |
@@ -37,17 +55,53 @@ jobs:
           git -C soh-src submodule update --init --depth 1
           git -C soh-src apply "$GITHUB_WORKSPACE/patches/web-mobile-perf.patch"
 
-      - name: Installer Ninja
-        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+      - name: Installer Ninja et ccache
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache
 
-      - uses: mymindstorm/setup-emsdk@v14
+      # Installed at a fixed path (not a per-run temp dir) so ccache entries match across runs.
+      - name: Installer Emscripten
+        run: |
+          git clone -q --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$HOME/emsdk/emsdk" activate "$EMSDK_VERSION"
+
+      - name: Restaurer le cache de compilation
+        uses: actions/cache/restore@v4
         with:
-          version: ${{ env.EMSDK_VERSION }}
-          actions-cache-folder: emsdk-cache
+          path: .ccache
+          key: ccache-web-${{ env.SOH_COMMIT }}-${{ hashFiles('patches/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-web-${{ env.SOH_COMMIT }}-
+            ccache-web-
 
       - name: Compiler en WebAssembly
         working-directory: soh-src
-        run: ./build_web.sh Release
+        env:
+          EM_COMPILER_WRAPPER: ccache
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_COMPILERCHECK: string:emsdk-${{ env.EMSDK_VERSION }}
+          CCACHE_MAXSIZE: 4G
+        run: |
+          source "$HOME/emsdk/emsdk_env.sh"
+          ( while sleep 60; do
+              free -m | awk 'NR==2{printf "[mem] used=%sMB available=%sMB", $3, $7} NR==3{printf " swap=%sMB\n", $3}'
+            done ) &
+          emcmake cmake -B build-web -S . -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_REMOTE_CONTROL=OFF \
+            -DUSE_OPENGLES=ON \
+            -DINCLUDE_MPQ_SUPPORT=ON \
+            -DGFX_DEBUG_DISASSEMBLER=OFF \
+            -DSUPPRESS_WARNINGS=ON
+          emmake cmake --build build-web --target soh -j"$BUILD_JOBS"
+          ccache -s
+
+      - name: Sauvegarder le cache de compilation
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-web-${{ env.SOH_COMMIT }}-${{ hashFiles('patches/**') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Assembler le site
         run: |
