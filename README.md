@@ -3,7 +3,9 @@
 Version web d'Ocarina of Time, jouable dans Safari sur iPhone, basée sur
 [Ship of Harkinian](https://github.com/HarbourMasters/Shipwright) (portage PC issu de la
 décompilation [zeldaret/oot](https://github.com/zeldaret/oot)) et sur son fork WebAssembly
-[zalo/shipwright-64](https://github.com/zalo/shipwright-64).
+[zalo/Shipwright](https://github.com/zalo/Shipwright/tree/feature/emscripten-web-port).
+
+Le jeu est **compilé nativement en WebAssembly + WebGL 2** : ce n'est pas un émulateur N64.
 
 Ce dépôt ne contient **aucune donnée du jeu** : vous fournissez votre propre ROM, qui est
 extraite **dans votre navigateur, sur votre appareil**. Elle n'est jamais envoyée ni publiée.
@@ -17,14 +19,20 @@ extraite **dans votre navigateur, sur votre appareil**. Elle n'est jamais envoy�
 
 Versions de ROM reconnues : N64 NTSC 1.0 / 1.1 / 1.2, N64 PAL 1.0 / 1.1, GameCube (NTSC, PAL, Master Quest).
 
+### Performances (objectif 60 FPS)
+
+La logique du jeu tourne à 20 Hz comme l'original ; les images intermédiaires sont interpolées
+à la fréquence de l'écran (`requestAnimationFrame`, 60 Hz sur iPhone). Pour afficher un compteur
+de FPS, ajoutez `#fps` à l'adresse : `https://garwiglino.github.io/Oot/#fps`.
+
 > Ne mettez **jamais** la ROM dans ce dépôt : il est public. Le `.gitignore` bloque les extensions courantes.
 
 ## Fonctionnement
 
 À chaque push sur `main`, le workflow [`build-web.yml`](.github/workflows/build-web.yml) :
 
-1. récupère les sources de `zalo/shipwright-64` à un commit fixe ;
-2. applique [`patches/shell-mobile-fr.patch`](patches/shell-mobile-fr.patch) ;
+1. récupère les sources de `zalo/Shipwright` à un commit fixe ;
+2. applique [`patches/web-mobile-perf.patch`](patches/web-mobile-perf.patch) ;
 3. compile en WebAssembly avec Emscripten 3.1.64 ;
 4. publie le site sur GitHub Pages.
 
@@ -34,15 +42,16 @@ Il peut aussi être relancé à la main : onglet **Actions** → *Compiler et pu
 
 **Settings** → **Pages** → **Source** : **GitHub Actions**.
 
-## Modifications apportées (`patches/shell-mobile-fr.patch`)
+## Modifications apportées (`patches/web-mobile-perf.patch`)
 
+- Compilation web en `-O2` (au lieu de `-O1`) et `ASSERTIONS=0`, pour tenir 60 FPS.
+- Compteur de FPS optionnel (`#fps`).
 - Sélecteur de fichier sans filtre d'extension : iOS grise sinon les fichiers `.z64`.
-- Conversion automatique des ROM `.n64` et `.v64` vers le format `.z64`.
+- Conversion automatique des ROM `.n64` et `.v64` vers le format `.z64`, avec vérification de la ROM.
 - Textes de l'écran de chargement en français.
-- Mode Mario (libsm64) masqué.
 
 ## Crédits
 
 [Ship of Harkinian](https://github.com/HarbourMasters/Shipwright) par HarbourMasters,
-portage web par [zalo](https://github.com/zalo/shipwright-64),
+portage web par [zalo](https://github.com/zalo/Shipwright),
 décompilation par [zeldaret](https://github.com/zeldaret/oot).

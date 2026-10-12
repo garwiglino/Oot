@@ -17,8 +17,8 @@ concurrency:
 
 env:
   # Ship of Harkinian web fork (Emscripten/WebGL, touch controls, in-browser ROM extraction)
-  SOH_REPO: https://github.com/zalo/shipwright-64
-  SOH_COMMIT: f2ce54a3d60c6b8f9eea2e2a671910501db89289
+  SOH_REPO: https://github.com/zalo/Shipwright
+  SOH_COMMIT: f81ff64afdd8e0489237bd03c6b026582f6dc70d
   EMSDK_VERSION: 3.1.64
 
 jobs:
@@ -34,8 +34,8 @@ jobs:
           git -C soh-src remote add origin "$SOH_REPO"
           git -C soh-src fetch -q --depth 1 origin "$SOH_COMMIT"
           git -C soh-src checkout -q FETCH_HEAD
-          git -C soh-src submodule update --init libsm64
-          git -C soh-src apply "$GITHUB_WORKSPACE/patches/shell-mobile-fr.patch"
+          git -C soh-src submodule update --init --depth 1
+          git -C soh-src apply "$GITHUB_WORKSPACE/patches/web-mobile-perf.patch"
 
       - name: Installer Ninja
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build

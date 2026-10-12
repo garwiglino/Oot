@@ -1,0 +1,143 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5f0e8be..c9fbcab 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -142,8 +142,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g -ffast-math -DDEBUG")
+ set(CMAKE_C_FLAGS_RELEASE "-O3 -ffast-math -DNDEBUG" CACHE STRING "C flags for Release" FORCE)
+ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math -DNDEBUG" CACHE STRING "CXX flags for Release" FORCE)
+ elseif(BUILD_FOR_WEB)
+-set(CMAKE_C_FLAGS_RELEASE "-O1 -DNDEBUG" CACHE STRING "C flags for Release" FORCE)
+-set(CMAKE_CXX_FLAGS_RELEASE "-O1 -DNDEBUG" CACHE STRING "CXX flags for Release" FORCE)
++set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "C flags for Release" FORCE)
++set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "CXX flags for Release" FORCE)
+ else()
+ set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "C flags for Release" FORCE)
+ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "CXX flags for Release" FORCE)
+diff --git a/soh/CMakeLists.txt b/soh/CMakeLists.txt
+index eb4fa29..cddf56f 100644
+--- a/soh/CMakeLists.txt
++++ b/soh/CMakeLists.txt
+@@ -625,7 +625,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+                 -sUSE_VORBIS=1
+                 -sUSE_LIBPNG=1
+                 -sWASM=1
+-                -sASSERTIONS=1
++                -sASSERTIONS=0
+                 -sALLOW_MEMORY_GROWTH=1
+                 -sINITIAL_MEMORY=268435456
+                 -sSTACK_SIZE=5242880
+diff --git a/soh/soh/web/shell.html b/soh/soh/web/shell.html
+index f92c3d1..fbfe1be 100644
+--- a/soh/soh/web/shell.html
++++ b/soh/soh/web/shell.html
+@@ -201,10 +201,11 @@
+     <p class="subtitle">WebAssembly Port</p>
+ 
+     <div id="otr-picker" onclick="document.getElementById('otr-file').click()">
+-      <p>Click or drag to load game files</p>
+-      <p class="hint">Requires soh.o2r and either oot.o2r or a .z64 ROM</p>
++      <p>Touchez ici pour choisir votre ROM Ocarina of Time</p>
++      <p class="hint">Formats .z64, .n64 ou .v64 — la ROM reste sur votre appareil</p>
+     </div>
+-    <input type="file" id="otr-file" accept=".otr,.o2r,.z64,.n64,.v64" multiple>
++    <!-- No accept filter: iOS greys out files whose extension it doesn't know (.z64). Files are validated in JS. -->
++    <input type="file" id="otr-file" multiple>
+ 
+     <div id="progress-container">
+       <div id="progress-bar-outer">
+@@ -444,9 +445,40 @@
+ 
+     // ---- ROM detection helpers ----
+ 
++    // Anything that isn't an archive is treated as a ROM candidate and validated by content,
++    // since mobile pickers may hand over files with unexpected extensions.
+     function isRomFile(name) {
+       var ext = name.toLowerCase().split('.').pop();
+-      return ext === 'z64' || ext === 'n64' || ext === 'v64';
++      return ext !== 'o2r' && ext !== 'otr';
++    }
++
++    // Converts .v64 (byte-swapped) and .n64 (little-endian) dumps to big-endian .z64 in place.
++    function normalizeRomByteOrder(arrayBuffer) {
++      if (arrayBuffer.byteLength < 0x40 || arrayBuffer.byteLength % 4 !== 0) return arrayBuffer;
++      var bytes = new Uint8Array(arrayBuffer);
++      var magic = new DataView(arrayBuffer).getUint32(0, false);
++      var i, t;
++      if (magic === 0x37804012) { // .v64: swap each 16-bit pair
++        for (i = 0; i < bytes.length; i += 2) {
++          t = bytes[i]; bytes[i] = bytes[i + 1]; bytes[i + 1] = t;
++        }
++      } else if (magic === 0x40123780) { // .n64: reverse each 32-bit word
++        for (i = 0; i < bytes.length; i += 4) {
++          t = bytes[i]; bytes[i] = bytes[i + 3]; bytes[i + 3] = t;
++          t = bytes[i + 1]; bytes[i + 1] = bytes[i + 2]; bytes[i + 2] = t;
++        }
++      }
++      return arrayBuffer;
++    }
++
++    // Big-endian N64 header whose internal title contains "ZELDA".
++    function isOotRom(arrayBuffer) {
++      if (arrayBuffer.byteLength < 0x40) return false;
++      var view = new DataView(arrayBuffer);
++      if (view.getUint32(0, false) !== 0x80371240) return false;
++      var title = '';
++      for (var i = 0; i < 20; i++) title += String.fromCharCode(view.getUint8(0x20 + i));
++      return title.toUpperCase().indexOf('ZELDA') >= 0;
+     }
+ 
+     function extractRomInBrowser(romArrayBuffer, romFileName) {
+@@ -550,7 +582,13 @@
+           setProgress(15);
+           var reader = new FileReader();
+           reader.onload = function(e) {
+-            extractRomInBrowser(e.target.result, pendingRom.name);
++            var buf = normalizeRomByteOrder(e.target.result);
++            if (!isOotRom(buf)) {
++              showError('Fichier non reconnu. Choisissez la ROM Ocarina of Time (.z64, .n64 ou .v64, non compressée).');
++              hideProgress();
++              return;
++            }
++            extractRomInBrowser(buf, pendingRom.name);
+           };
+           reader.onerror = function() {
+             showError('Failed to read ROM file: ' + pendingRom.name);
+@@ -742,7 +780,7 @@
+           var fileName = urlPath.split('/').pop() || 'rom.z64';
+           if (!isRomFile(fileName)) fileName = 'rom.z64';
+ 
+-          extractRomInBrowser(xhr.response, fileName);
++          extractRomInBrowser(normalizeRomByteOrder(xhr.response), fileName);
+         } else {
+           showError('Failed to download ROM: HTTP ' + xhr.status);
+           hideProgress();
+@@ -1226,6 +1264,29 @@
+     })();
+   </script>
+ 
++  <script>
++    // Optional FPS counter, enabled with #fps in the URL. The game renders once per
++    // requestAnimationFrame, so the rAF rate is the rendered frame rate.
++    (function() {
++      if (!/(^|[#&])fps(=|&|$)/.test(window.location.hash)) return;
++      var el = document.createElement('div');
++      el.style.cssText = 'position:fixed;top:4px;left:4px;z-index:9999;padding:2px 6px;' +
++        'font:12px monospace;color:#0f0;background:rgba(0,0,0,.6);border-radius:4px;pointer-events:none';
++      document.body.appendChild(el);
++      var frames = 0, last = performance.now();
++      function tick(now) {
++        frames++;
++        if (now - last >= 1000) {
++          el.textContent = Math.round(frames * 1000 / (now - last)) + ' FPS';
++          frames = 0;
++          last = now;
++        }
++        requestAnimationFrame(tick);
++      }
++      requestAnimationFrame(tick);
++    })();
++  </script>
++
+   {{{ SCRIPT }}}
+ 
+ </body>
