@@ -2,10 +2,21 @@
 // Each replacement checks the pinned upstream text so a future upstream change fails loudly.
 const fs = require('node:fs');
 const file = process.argv[2];
-if (!file) throw new Error('Usage: node web/fix-loader.cjs <index.html>');
+if (!file) throw new Error('Usage: node web/fix-loader.cjs <index.html> [patched-shell.html]');
 let html = fs.readFileSync(file, 'utf8');
 const marker = '<!-- oot-loader-fixes-v1 -->';
 if (!html.includes(marker)) {
+  // Release Emscripten minifies inline JS as well as HTML. Restore the pinned,
+  // patched source shell first, preserving the compiler's actual runtime tag.
+  // The WASM, JS runtime and data bundle are kept byte-for-byte unchanged.
+  if (process.argv[3]) {
+    const template = fs.readFileSync(process.argv[3], 'utf8');
+    const runtimeTags = html.match(/<script\b[^>]*\bsrc=(?:"soh\.js"|'soh\.js'|soh\.js)[^>]*>\s*<\/script>/g) || [];
+    if (runtimeTags.length !== 1 || template.split('{{{ SCRIPT }}}').length !== 2) {
+      throw new Error('Unexpected Emscripten runtime tag or shell template');
+    }
+    html = template.replace('{{{ SCRIPT }}}', runtimeTags[0]);
+  }
   function replaceOnce(before, after) {
     if (html.split(before).length !== 2) throw new Error('Unexpected loader version near: ' + before.slice(0, 100));
     html = html.replace(before, after);

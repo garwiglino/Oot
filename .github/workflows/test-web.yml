@@ -34,7 +34,17 @@ jobs:
         with:
           node-version: '22'
       - name: Corriger le chargement avant les tests
-        run: node web/fix-loader.cjs site/index.html
+        run: |
+          # Release Emscripten minifies the shell's inline JavaScript. Recreate
+          # the readable shell from the same pinned source before patching it.
+          mkdir -p loader-source/soh/soh/web
+          curl --fail --show-error --location --retry 3 \
+            https://raw.githubusercontent.com/zalo/Shipwright/f81ff64afdd8e0489237bd03c6b026582f6dc70d/soh/soh/web/shell.html \
+            -o loader-source/soh/soh/web/shell.html
+          echo '925bfc59191cab7056dc44ce83f4872c9980ce354e1e8306fec82513f833671f  loader-source/soh/soh/web/shell.html' | sha256sum -c -
+          git -C loader-source init -q
+          git -C loader-source apply --include=soh/soh/web/shell.html "$GITHUB_WORKSPACE/patches/web-mobile-perf.patch"
+          node web/fix-loader.cjs site/index.html loader-source/soh/soh/web/shell.html
       - name: Installer les navigateurs de test
         run: |
           npm install --no-save --no-package-lock playwright@1.56.1 jsdom@26.1.0 fake-indexeddb@6.2.4
