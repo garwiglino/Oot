@@ -76,6 +76,11 @@ jobs:
             -DINCLUDE_MPQ_SUPPORT=ON \
             -DGFX_DEBUG_DISASSEMBLER=OFF \
             -DSUPPRESS_WARNINGS=ON
+          # The randomizer data tables need ~8 GB of RAM each at -O1/-O2: build them one at a
+          # time first (-O0 is not an option: its 50k+ locals per function break the wasm link).
+          HEAVY=$(ninja -C build-web -t targets all | grep -o -E '^soh/CMakeFiles/soh\.dir/soh/Enhancements/randomizer/(3drando/hint_list[^:]*|ShufflePots|item_list|location_list|settings)\.cpp\.o' | sort -u)
+          echo "$HEAVY"
+          emmake ninja -C build-web -j1 $HEAVY
           emmake cmake --build build-web --target soh -j"$BUILD_JOBS"
 
       - name: Assembler le site
