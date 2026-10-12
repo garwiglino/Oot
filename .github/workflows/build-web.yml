@@ -1,7 +1,13 @@
 name: Compiler et publier le jeu web
 
-# Manual only: the site is normally built locally and published by deploy-web.yml.
+# Build and deploy the pinned web port whenever its build inputs change.
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-web.yml'
+      - 'patches/**'
+      - 'scripts/web/**'
   workflow_dispatch:
 
 permissions:
@@ -23,14 +29,14 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
 
       # The previous run was killed mid-build ("runner has received a shutdown signal"),
-      # which on hosted runners usually means memory exhaustion while compiling the large
-      # randomizer sources. Free disk space and add swap so the build can't be OOM-killed.
+      # possibly due to memory pressure in large randomizer sources. Add swap
+      # and compile heavy translation units sequentially to reduce peak memory.
       - name: Libérer de l'espace disque et ajouter de la mémoire swap
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -65,6 +71,7 @@ jobs:
       - name: Compiler en WebAssembly
         working-directory: soh-src
         run: |
+          set -o pipefail
           source "$HOME/emsdk/emsdk_env.sh"
           ( while sleep 60; do
               free -m | awk 'NR==2{printf "[mem] used=%sMB available=%sMB", $3, $7} NR==3{printf " swap=%sMB\n", $3}'
@@ -79,9 +86,10 @@ jobs:
           # The randomizer data tables need ~8 GB of RAM each at -O1/-O2: build them one at a
           # time first (-O0 is not an option: its 50k+ locals per function break the wasm link).
           HEAVY=$(ninja -C build-web -t targets all | grep -o -E '^soh/CMakeFiles/soh\.dir/soh/Enhancements/randomizer/(3drando/hint_list[^:]*|ShufflePots|item_list|location_list|settings)\.cpp\.o' | sort -u)
+          test -n "$HEAVY" || { echo 'No heavy compilation targets found'; exit 1; }
           echo "$HEAVY"
-          emmake ninja -C build-web -j1 $HEAVY
-          emmake cmake --build build-web --target soh -j"$BUILD_JOBS"
+          emmake ninja -C build-web -j1 $HEAVY 2>&1 | tee build-heavy.log
+          emmake cmake --build build-web --target soh -j"$BUILD_JOBS" 2>&1 | tee build-main.log
 
       - name: Assembler le site
         run: |
@@ -94,13 +102,39 @@ jobs:
           touch site/.nojekyll
           ls -la site
 
+      - name: Vérifier les fichiers et le module WebAssembly
+        run: |
+          for file in index.html soh.js soh.wasm soh.data soh.o2r; do
+            test -s "site/$file" || { echo "Missing or empty file: $file"; exit 1; }
+          done
+          node -e "WebAssembly.compile(require('fs').readFileSync('site/soh.wasm')).then(() => console.log('WASM compilation OK')).catch(e => { console.error(e); process.exit(1); })"
+          sha256sum site/* > site/SHA256SUMS.txt
+
+      - name: Conserver le site compilé
+        uses: actions/upload-artifact@v4
+        with:
+          name: oot-web-site
+          path: site
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Conserver les journaux de compilation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oot-web-build-logs
+          path: |
+            soh-src/build-*.log
+            soh-src/build-web/CMakeFiles/CMakeConfigureLog.yaml
+          retention-days: 14
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
