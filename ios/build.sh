@@ -116,6 +116,17 @@ done
 
 step "Sources Ship of Harkinian 9.3.0 + patchs iOS"
 "$PORT/scripts/bootstrap.sh"
+
+# 0900 extends the block inserted by upstream 0004. On a retry it prevents
+# apply-overlay.sh's reverse dry-run from recognizing 0004 as already applied.
+# Undo only our addition before upstream checks; the ordered series reapplies
+# it last. No source reset, build cleanup, or ROM/data removal is needed.
+BUNDLED_PATCH="$PORT/overlay/patches/0900-oot-bundled-o2r.patch"
+VENDOR="$PORT/vendor/Shipwright"
+if patch -p1 -R --force --fuzz=0 --dry-run -d "$VENDOR" < "$BUNDLED_PATCH" >/dev/null 2>&1; then
+    patch -p1 -R --force --fuzz=0 -d "$VENDOR" < "$BUNDLED_PATCH"
+    echo "overlay: patch 0900 retiré temporairement pour vérifier les patchs d'origine"
+fi
 "$PORT/scripts/apply-overlay.sh"
 
 step "Dépendances audio iOS"
