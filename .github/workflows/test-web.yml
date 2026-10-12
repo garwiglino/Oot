@@ -1,5 +1,11 @@
 name: Tester le jeu web
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test-web.yml'
+      - 'web/**'
+      - 'tests/**'
   workflow_run:
     workflows: [Compiler et publier le jeu web]
     types: [completed]
@@ -24,11 +30,27 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Choisir le moteur déjà compilé
+        id: engine
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let runId = context.payload.inputs?.run_id || context.payload.workflow_run?.id;
+            if (!runId) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo, workflow_id: 'build-web.yml', branch: 'main',
+                status: 'success', per_page: 1
+              });
+              runId = data.workflow_runs[0]?.id;
+            }
+            if (!runId) throw new Error('Aucune compilation réussie disponible');
+            core.setOutput('run_id', String(runId));
+            core.info('Moteur issu de la compilation ' + runId);
       - uses: actions/download-artifact@v4
         with:
           name: oot-web-site
           path: site
-          run-id: ${{ inputs.run_id || github.event.workflow_run.id }}
+          run-id: ${{ steps.engine.outputs.run_id }}
           github-token: ${{ github.token }}
       - uses: actions/setup-node@v4
         with:
@@ -65,7 +87,7 @@ jobs:
           sha256sum site/* > site/SHA256SUMS.txt
       - name: Conserver durablement le site vérifié sur web-build
         env:
-          BUILD_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+          BUILD_RUN_ID: ${{ steps.engine.outputs.run_id }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

@@ -39,7 +39,10 @@ async function run(name, browserType, baseURL) {
     await page.goto(baseURL, { waitUntil: 'load', timeout: 120000 });
     await page.waitForFunction(() => {
       try {
-        return typeof Module?._web_is_idbfs_ready === 'function' && Module._web_is_idbfs_ready() === 1 && FS.stat('/soh.o2r').size > 0;
+        // Emscripten creates lazy export wrappers before WASM is initialized.
+        // Calling one early replaces it with undefined. Wait for our loader's
+        // runtime-ready signal before invoking any compiled function.
+        return typeof runtimeReady !== 'undefined' && runtimeReady && FS.stat('/soh.o2r').size > 0 && Module._web_is_idbfs_ready() === 1;
       } catch { return false; }
     }, null, { timeout: 120000 });
     // Wait for async cached-file processing to settle before checking the idle loader.
@@ -73,15 +76,28 @@ async function run(name, browserType, baseURL) {
     });
     assert.deepEqual(buttons, { both: true, cancelled: true, released: true });
     await page.reload({ waitUntil: 'load' });
-    await page.waitForFunction(() => { try { return Module._web_is_idbfs_ready() === 1 && FS.stat('/soh.o2r').size > 0; } catch { return false; } });
+    await page.waitForFunction(() => { try { return typeof runtimeReady !== 'undefined' && runtimeReady && FS.stat('/soh.o2r').size > 0 && Module._web_is_idbfs_ready() === 1; } catch { return false; } }, null, { timeout: 120000 });
     await page.waitForTimeout(1000);
     assert.equal(await page.locator('#error-msg').innerText(), '', 'Reload with only the engine archive cached must remain ready for a ROM');
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(failedRequests, []);
     console.log(`${name}: engine initialization, extractor files, invalid ROM, touch buttons and reload PASS`);
   } finally {
+    const runtimeState = await page.evaluate(() => {
+      const result = { readyState: document.readyState, visibility: document.visibilityState };
+      result.runtimeReady = typeof runtimeReady !== 'undefined' && runtimeReady;
+      if (result.runtimeReady) {
+        try { result.idbReady = Module._web_is_idbfs_ready(); } catch (e) { result.idbError = String(e); }
+        try { result.romStatus = Module._web_get_otr_status(); } catch (e) { result.romError = String(e); }
+      }
+      try { result.engineSize = FS.stat('/soh.o2r').size; } catch (e) { result.fsError = String(e); }
+      result.statusText = document.getElementById('status')?.textContent;
+      result.errorText = document.getElementById('error-msg')?.textContent;
+      return result;
+    }).catch(e => ({ error: String(e) }));
+    console.log(name + ' final runtime state:', JSON.stringify(runtimeState));
     await page.screenshot({ path: path.join(reports, name + '.png') }).catch(() => {});
-    fs.writeFileSync(path.join(reports, name + '.json'), JSON.stringify({ logs, pageErrors, failedRequests }, null, 2));
+    fs.writeFileSync(path.join(reports, name + '.json'), JSON.stringify({ runtimeState, logs, pageErrors, failedRequests }, null, 2));
     await browser.close();
   }
 }
