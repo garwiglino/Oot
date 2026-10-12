@@ -1,6 +1,6 @@
 name: Compiler et publier le jeu web
 
-# Build and deploy the pinned web port whenever its build inputs change.
+# Compile the pinned engine. test-web.yml validates and publishes the resulting artifact.
 on:
   push:
     branches: [main]
@@ -12,12 +12,10 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Never cancel a build in progress: a new push waits for the running one to finish.
 concurrency:
-  group: pages
+  group: web-engine-build
   cancel-in-progress: false
 
 env:
@@ -127,17 +125,3 @@ jobs:
             soh-src/build-*.log
             soh-src/build-web/CMakeFiles/CMakeConfigureLog.yaml
           retention-days: 14
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

@@ -10,7 +10,7 @@ on:
         description: Build run containing the oot-web-site artifact
         required: true
 permissions:
-  contents: read
+  contents: write
   actions: read
   pages: write
   id-token: write
@@ -53,6 +53,29 @@ jobs:
         run: |
           rm -f site/SHA256SUMS.txt
           sha256sum site/* > site/SHA256SUMS.txt
+      - name: Conserver durablement le site vérifié sur web-build
+        env:
+          BUILD_RUN_ID: ${{ inputs.run_id || github.event.workflow_run.id }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git ls-remote --exit-code --heads origin web-build; then
+            git fetch origin web-build
+            git worktree add --detach site-publish FETCH_HEAD
+          else
+            git worktree add --detach site-publish HEAD
+            git -C site-publish switch --orphan web-build
+          fi
+          for file in index.html soh.js soh.wasm soh.data soh.o2r SHA256SUMS.txt; do
+            cp "site/$file" "site-publish/$file"
+            git -C site-publish add -f "$file"
+          done
+          touch site-publish/.nojekyll
+          git -C site-publish add .nojekyll
+          if ! git -C site-publish diff --cached --quiet; then
+            git -C site-publish commit -m "Publish tested engine from build $BUILD_RUN_ID (loader $GITHUB_SHA)"
+            git -C site-publish push origin HEAD:refs/heads/web-build
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: oot-web-tested
