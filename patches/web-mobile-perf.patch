@@ -14,10 +14,29 @@ index 5f0e8be..c9fbcab 100644
  set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "C flags for Release" FORCE)
  set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG" CACHE STRING "CXX flags for Release" FORCE)
 diff --git a/soh/CMakeLists.txt b/soh/CMakeLists.txt
-index eb4fa29..cddf56f 100644
+index eb4fa29..3d3a154 100644
 --- a/soh/CMakeLists.txt
 +++ b/soh/CMakeLists.txt
-@@ -625,7 +625,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+@@ -615,6 +615,18 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+                 >
+             )
+ 
++            # Randomizer data tables need ~7.5 GB of RAM per file at -O2, which OOM-kills
++            # parallel builds. They only run when generating a seed, so build them at -O1.
++            file(GLOB SOH_WEB_LOW_OPT_SOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
++                soh/Enhancements/randomizer/3drando/hint_list.cpp
++                soh/Enhancements/randomizer/3drando/hint_list/*.cpp
++                soh/Enhancements/randomizer/location_list.cpp
++                soh/Enhancements/randomizer/item_list.cpp
++                soh/Enhancements/randomizer/settings.cpp
++                soh/Enhancements/randomizer/ShufflePots.cpp
++            )
++            set_source_files_properties(${SOH_WEB_LOW_OPT_SOURCES} PROPERTIES COMPILE_OPTIONS -O1)
++
+             # Opus/Vorbis audio decoding is stubbed out on web builds
+             # (Opus decoded to silence, Vorbis via emscripten port)
+ 
+@@ -625,7 +637,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
                  -sUSE_VORBIS=1
                  -sUSE_LIBPNG=1
                  -sWASM=1
